@@ -23,9 +23,10 @@ data class AuthenticatedUser(val subject: String, val roles: List<String>)
 @GrpcGlobalServerInterceptor
 class AuthServerInterceptor(
     @Value("\${fleet.auth.jwt-secret}") private val jwtSecret: String,
-    @Value("\${fleet.auth.skip-auth-methods}") private val skipMethods: List<String>
+    @Value("\${fleet.auth.skip-auth-methods}") skipMethodsStr: String
 ) : ServerInterceptor {
 
+    private val skipMethods = skipMethodsStr.split(",").map { it.trim() }
     private val log = LoggerFactory.getLogger(AuthServerInterceptor::class.java)
 
     companion object {

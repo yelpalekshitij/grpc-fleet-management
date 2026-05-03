@@ -15,8 +15,7 @@ grpc:
 fleet:
   auth:
     jwt-secret: "your-256-bit-secret-change-in-production"
-    skip-auth-methods:
-      - "grpc.health.v1.Health/Check"
+    skip-auth-methods: "grpc.health.v1.Health/Check"
   storage:
     # In production: point to S3, GCS, or local mount
     base-path: "/tmp/fleet-documents"

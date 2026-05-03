@@ -277,9 +277,17 @@ log.info("Called by: ${caller.subject}, roles: ${caller.roles}")
 ### Client Interceptor (trip-service only)
 
 `@GrpcGlobalClientInterceptor` — runs before every outbound gRPC call:
+- Generates a service-to-service JWT at startup (signed with the same `jwt-secret`)
 - Injects `"Authorization: Bearer <service-token>"` into outbound `Metadata`
 
 ```kotlin
+// Token generated once at startup — signed with the same secret vehicle-service validates
+private val serviceToken: String by lazy {
+    val key = Keys.hmacShaKeyFor(jwtSecret.toByteArray(StandardCharsets.UTF_8))
+    Jwts.builder().subject("trip-service").claim("roles", listOf("SERVICE"))
+        .issuedAt(Date()).signWith(key).compact()
+}
+
 // ForwardingClientCall — wraps every outbound call transparently
 override fun start(responseListener: Listener<RespT>, headers: Metadata) {
     headers.put(AUTHORIZATION_KEY, "Bearer $serviceToken")
@@ -449,7 +457,58 @@ testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 | Coroutines         | `kotlinx-coroutines-core:1.8.1`           |
 | Authentication     | JJWT 0.12.6 (HMAC-SHA256)                |
 | Testing            | JUnit 5 + AssertJ, in-process gRPC        |
+| API explorer       | gRPC reflection + grpcui (Swagger equiv.) |
 | Build              | Gradle 9.2.1 (Kotlin DSL, multi-module)   |
+
+---
+
+## API Exploration (gRPC Reflection)
+
+gRPC **Server Reflection** is the equivalent of Swagger/OpenAPI for gRPC. A running
+server advertises its full service definitions so clients can discover methods and
+schema without the `.proto` files.
+
+### How it's enabled
+
+Each service has `io.grpc:grpc-services` on its classpath. The
+`net.devh:grpc-spring-boot-starter` auto-detects `ProtoReflectionService` and
+registers it — no explicit configuration needed.
+
+```kotlin
+// build.gradle.kts (each service)
+implementation("io.grpc:grpc-services:1.67.1")  // adds ProtoReflectionService
+```
+
+### grpcui — browser-based UI (like Swagger UI)
+
+```
+grpcui -plaintext localhost:9091
+```
+
+Opens a web page with:
+- All services and their methods listed in a sidebar
+- Auto-generated request form for each method (from proto schema)
+- Live call execution with response display
+- Streaming support — shows each message as it arrives
+
+### grpcurl — CLI tool (like curl)
+
+```bash
+# List all services
+grpcurl -plaintext localhost:9091 list
+
+# Describe service methods + request/response types
+grpcurl -plaintext localhost:9091 describe fleetmanagement.vehicle.VehicleService
+
+# Describe a specific message
+grpcurl -plaintext localhost:9091 describe fleetmanagement.vehicle.Vehicle
+
+# Make a call
+grpcurl -plaintext \
+  -H "authorization: Bearer <token>" \
+  -d '{"id": "veh-001"}' \
+  localhost:9091 fleetmanagement.vehicle.VehicleService/GetVehicle
+```
 
 ---
 

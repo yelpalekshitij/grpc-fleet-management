@@ -51,8 +51,8 @@ class AuthInterceptorIntegrationTest {
     fun setup() {
         val serverName = InProcessServerBuilder.generateName()
         val interceptor = AuthServerInterceptor(
-            jwtSecret   = TEST_SECRET,
-            skipMethods = listOf("grpc.health.v1.Health/Check")
+            jwtSecret       = TEST_SECRET,
+            skipMethodsStr  = "grpc.health.v1.Health/Check"
         )
 
         server = InProcessServerBuilder.forName(serverName)

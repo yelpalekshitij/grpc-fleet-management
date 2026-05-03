@@ -9,7 +9,9 @@ PID_DIR      := .pids
 
 .PHONY: help build test test-vehicle test-trip test-document \
         start-vehicle start-trip start-document start-all stop-all \
-        run-client docker-up docker-down clean logs
+        run-client docker-up docker-down clean logs \
+        grpcui-vehicle grpcui-trip grpcui-document \
+        grpcurl-list grpcurl-describe-vehicle grpcurl-describe-trip grpcurl-describe-document
 
 # ─── Default ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +159,19 @@ clean: ## Clean all build artifacts
 _ensure-dirs:
 	@mkdir -p $(LOG_DIR) $(PID_DIR)
 
+# ─── gRPC-UI (Swagger equivalent for gRPC) ───────────────────────────────────
+# Install: brew install grpcui
+# Requires services to be running (make start-all) and grpc-services dep on classpath
+
+grpcui-vehicle: ## Open Swagger-like UI for vehicle-service in browser
+	grpcui -plaintext localhost:9091
+
+grpcui-trip: ## Open Swagger-like UI for trip-service in browser
+	grpcui -plaintext localhost:9092
+
+grpcui-document: ## Open Swagger-like UI for document-service in browser
+	grpcui -plaintext localhost:9093
+
 # ─── grpcurl Quick-Reference ──────────────────────────────────────────────────
 # (requires brew install grpcurl)
 
@@ -170,3 +185,9 @@ grpcurl-list: ## List available gRPC services on all ports
 
 grpcurl-describe-vehicle: ## Describe VehicleService methods
 	grpcurl -plaintext localhost:9091 describe fleetmanagement.vehicle.VehicleService
+
+grpcurl-describe-trip: ## Describe TripService methods
+	grpcurl -plaintext localhost:9092 describe fleetmanagement.trip.TripService
+
+grpcurl-describe-document: ## Describe DocumentService methods
+	grpcurl -plaintext localhost:9093 describe fleetmanagement.document.DocumentService

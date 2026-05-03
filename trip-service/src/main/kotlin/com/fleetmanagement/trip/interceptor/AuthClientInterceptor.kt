@@ -7,9 +7,13 @@ import io.grpc.ClientInterceptor
 import io.grpc.ForwardingClientCall
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
+import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.security.Keys
 import net.devh.boot.grpc.client.interceptor.GrpcGlobalClientInterceptor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import java.nio.charset.StandardCharsets
+import java.util.Date
 
 // =============================================================================
 // gRPC AUTHENTICATION — CLIENT INTERCEPTOR
@@ -27,8 +31,19 @@ import org.springframework.beans.factory.annotation.Value
 
 @GrpcGlobalClientInterceptor
 class AuthClientInterceptor(
-    @Value("\${fleet.auth.service-token}") private val serviceToken: String
+    @Value("\${fleet.auth.jwt-secret}") private val jwtSecret: String
 ) : ClientInterceptor {
+
+    // Generated at startup — signed with the same secret vehicle-service uses to validate
+    private val serviceToken: String by lazy {
+        val key = Keys.hmacShaKeyFor(jwtSecret.toByteArray(StandardCharsets.UTF_8))
+        Jwts.builder()
+            .subject("trip-service")
+            .claim("roles", listOf("SERVICE"))
+            .issuedAt(Date())
+            .signWith(key)
+            .compact()
+    }
 
     private val log = LoggerFactory.getLogger(AuthClientInterceptor::class.java)
 

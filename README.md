@@ -151,6 +151,54 @@ make docker-down
 
 ---
 
+## Browsing the API (Swagger Equivalent)
+
+gRPC has **Server Reflection** — a protocol that lets tools query a running server
+for its full service definitions. Combined with **grpcui**, you get a browser-based
+UI that works just like Swagger.
+
+### Install
+
+```bash
+brew install grpcui   # the browser UI
+brew install grpcurl  # the CLI tool
+```
+
+### Open the UI
+
+Start services first (`make start-all`), then:
+
+```bash
+make grpcui-vehicle   # opens http://localhost:<random-port> for vehicle-service
+make grpcui-trip      # for trip-service
+make grpcui-document  # for document-service
+```
+
+The UI shows every service, every method, and auto-generates the request form
+from the proto schema — identical experience to Swagger UI.
+
+### Or use grpcurl as CLI
+
+```bash
+# List all services on a port
+make grpcurl-list
+
+# Describe all methods of a service
+make grpcurl-describe-vehicle
+make grpcurl-describe-trip
+make grpcurl-describe-document
+
+# Describe a specific message type
+grpcurl -plaintext localhost:9091 describe fleetmanagement.vehicle.Vehicle
+grpcurl -plaintext localhost:9092 describe fleetmanagement.trip.Trip
+```
+
+> **How it works:** Each service has `io.grpc:grpc-services` on its classpath.
+> `net.devh:grpc-spring-boot-starter` detects this and automatically registers
+> `ProtoReflectionService` alongside your service. No extra config needed.
+
+---
+
 ## Testing with grpcurl
 
 grpcurl is a command-line tool for calling gRPC services — like curl but for gRPC.

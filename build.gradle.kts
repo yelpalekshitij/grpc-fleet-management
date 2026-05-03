@@ -18,6 +18,22 @@ allprojects {
 }
 
 subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force(
+                "io.grpc:grpc-api:1.67.1",
+                "io.grpc:grpc-core:1.67.1",
+                "io.grpc:grpc-stub:1.67.1",
+                "io.grpc:grpc-netty-shaded:1.67.1",
+                "io.grpc:grpc-protobuf:1.67.1",
+                "io.grpc:grpc-protobuf-lite:1.67.1",
+                "io.grpc:grpc-context:1.67.1",
+                "io.grpc:grpc-inprocess:1.67.1",
+                "io.grpc:grpc-util:1.67.1"
+            )
+        }
+    }
+
     tasks.withType<KotlinCompile> {
         compilerOptions {
             freeCompilerArgs.add("-Xjsr305=strict")

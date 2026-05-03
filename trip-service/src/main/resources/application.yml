@@ -21,10 +21,8 @@ grpc:
 fleet:
   auth:
     jwt-secret: "your-256-bit-secret-change-in-production"
-    # The service-to-service token (in production, use short-lived machine tokens)
-    service-token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0cmlwLXNlcnZpY2UiLCJyb2xlcyI6WyJTRVJWSUNFIl0sImlhdCI6MTcwMDAwMDAwMH0.placeholder"
-    skip-auth-methods:
-      - "grpc.health.v1.Health/Check"
+    # service-token is generated at startup by AuthClientInterceptor (signed with jwt-secret above)
+    skip-auth-methods: "grpc.health.v1.Health/Check"
 
 logging:
   level:
