@@ -22,7 +22,7 @@ fleet:
   auth:
     jwt-secret: "your-256-bit-secret-change-in-production"
     # service-token is generated at startup by AuthClientInterceptor (signed with jwt-secret above)
-    skip-auth-methods: "grpc.health.v1.Health/Check"
+    skip-auth-methods: "grpc.health.v1.Health/Check,grpc.reflection"
 
 logging:
   level:

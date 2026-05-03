@@ -7,10 +7,11 @@ services:
       context: .
       dockerfile: vehicle-service/Dockerfile
     ports:
-      - "8081:8081"   # REST / health
+      - "8081:8081"   # REST / actuator
       - "9091:9091"   # gRPC
     environment:
       - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
     networks:
       - fleet-network
 
@@ -23,7 +24,10 @@ services:
       - "9092:9092"
     environment:
       - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
-      - GRPC_CLIENT_VEHICLE-SERVICE_ADDRESS=static://vehicle-service:9091
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
+      # Spring Boot maps GRPC_CLIENT_VEHICLESERVICE_ADDRESS → grpc.client.vehicle-service.address
+      # (dots and hyphens in property names both become _ in env vars)
+      - GRPC_CLIENT_VEHICLESERVICE_ADDRESS=static://vehicle-service:9091
     depends_on:
       - vehicle-service
     networks:
@@ -38,6 +42,7 @@ services:
       - "9093:9093"
     environment:
       - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
     volumes:
       - doc-storage:/tmp/fleet-documents
     networks:

@@ -112,41 +112,39 @@ make test-report
 make build
 ```
 
-### 2. Start all services
+### Option A — Docker Compose (recommended, zero setup)
 
 ```bash
-# Using Makefile (recommended — manages PID files and logs)
+make docker-up          # builds images + starts all 3 services (foreground)
+make docker-up-bg       # same but in background
+make docker-logs        # tail all service logs
+make docker-down        # stop and remove containers
+```
+
+Services talk to each other over the `fleet-network` Docker network.
+`grpcui-all`, `grpcurl`, and `make run-client` all work the same way against `localhost`.
+
+### Option B — Local JVM (no Docker)
+
+```bash
+# Builds all jars, then starts 3 background java processes
 make start-all
 
-# Or individually:
-make start-vehicle
-make start-trip
-make start-document
-
-# Check what's running:
+# Check running PIDs:
 make status
 
 # Stop everything:
 make stop-all
 ```
 
-### 3. Run the demo gRPC client
+`start-all` always runs `make build` first, so jars are always up to date.
 
-Once all services are up, the `grpc-client` module walks through every RPC pattern
-against the live services:
+### Run the demo gRPC client
+
+Once services are up (either way):
 
 ```bash
 make run-client
-```
-
-### 4. Or run everything with Docker Compose
-
-```bash
-make docker-up
-# background:
-make docker-up-bg
-make docker-logs
-make docker-down
 ```
 
 ---
@@ -177,6 +175,24 @@ make grpcui-document  # for document-service
 The UI shows every service, every method, and auto-generates the request form
 from the proto schema — identical experience to Swagger UI.
 
+### Authenticating in grpcui
+
+All service methods require a JWT. To generate one:
+
+```bash
+make token
+# prints: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...
+```
+
+In the grpcui browser page, scroll down to **Request Metadata** and add:
+
+| Key | Value |
+|-----|-------|
+| `authorization` | `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...` |
+
+> The key **must be lowercase** `authorization` — HTTP/2 header rules reject uppercase.
+> Health and reflection calls skip auth automatically and don't need this header.
+
 ### Or use grpcurl as CLI
 
 ```bash
@@ -205,24 +221,16 @@ grpcurl is a command-line tool for calling gRPC services — like curl but for g
 
 ### Generate a test JWT
 
-The services expect `Authorization: Bearer <jwt>`. For testing, generate a token
-signed with the secret `your-256-bit-secret-change-in-production`:
+The services expect `Authorization: Bearer <jwt>`. Use the Makefile target:
 
 ```bash
-# Using https://jwt.io — paste this payload:
-# { "sub": "test-user", "roles": ["ADMIN"], "iat": 1700000000 }
-# Sign with HS256 and secret: your-256-bit-secret-change-in-production
+make token
+# Test JWT (copy the Bearer value below):
+# Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...
 ```
 
-Or generate programmatically (Java/Kotlin):
-```kotlin
-val key = Keys.hmacShaKeyFor("your-256-bit-secret-change-in-production".toByteArray())
-val token = Jwts.builder()
-    .subject("test-user")
-    .claim("roles", listOf("ADMIN"))
-    .signWith(key)
-    .compact()
-```
+Pass the full `Bearer <token>` string as the `-H "authorization: ..."` header value.
+The token is signed with `your-256-bit-secret-change-in-production` using HMAC-SHA256.
 
 ### List available services
 

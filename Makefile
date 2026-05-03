@@ -9,8 +9,8 @@ PID_DIR      := .pids
 
 .PHONY: help build test test-vehicle test-trip test-document \
         start-vehicle start-trip start-document start-all stop-all \
-        run-client docker-up docker-down clean logs \
-        grpcui-vehicle grpcui-trip grpcui-document \
+        run-client docker-up docker-down clean logs token \
+        grpcui-vehicle grpcui-trip grpcui-document grpcui-all grpcui-stop \
         grpcurl-list grpcurl-describe-vehicle grpcurl-describe-trip grpcurl-describe-document
 
 # ─── Default ──────────────────────────────────────────────────────────────────
@@ -54,29 +54,28 @@ test-report: ## Open HTML test report in browser (macOS)
 
 start-vehicle: _ensure-dirs ## Start vehicle-service in background (gRPC :9091, REST :8081)
 	@echo "Starting vehicle-service..."
-	@$(GRADLE) :vehicle-service:bootRun > $(LOG_DIR)/vehicle.log 2>&1 & echo $$! > $(PID_DIR)/vehicle.pid
+	@java -jar vehicle-service/build/libs/vehicle-service-1.0.0.jar \
+		> $(LOG_DIR)/vehicle.log 2>&1 & echo $$! > $(PID_DIR)/vehicle.pid
 	@echo "  PID $$(cat $(PID_DIR)/vehicle.pid) — logs: $(LOG_DIR)/vehicle.log"
-	@echo "  Waiting for startup..."; sleep 4
-	@echo "  vehicle-service ready on gRPC :9091"
 
 start-trip: _ensure-dirs ## Start trip-service in background (gRPC :9092, REST :8082)
 	@echo "Starting trip-service..."
-	@$(GRADLE) :trip-service:bootRun > $(LOG_DIR)/trip.log 2>&1 & echo $$! > $(PID_DIR)/trip.pid
+	@java -jar trip-service/build/libs/trip-service-1.0.0.jar \
+		> $(LOG_DIR)/trip.log 2>&1 & echo $$! > $(PID_DIR)/trip.pid
 	@echo "  PID $$(cat $(PID_DIR)/trip.pid) — logs: $(LOG_DIR)/trip.log"
-	@echo "  Waiting for startup..."; sleep 4
-	@echo "  trip-service ready on gRPC :9092"
 
 start-document: _ensure-dirs ## Start document-service in background (gRPC :9093, REST :8083)
 	@echo "Starting document-service..."
-	@$(GRADLE) :document-service:bootRun > $(LOG_DIR)/document.log 2>&1 & echo $$! > $(PID_DIR)/document.pid
+	@java -jar document-service/build/libs/document-service-1.0.0.jar \
+		> $(LOG_DIR)/document.log 2>&1 & echo $$! > $(PID_DIR)/document.pid
 	@echo "  PID $$(cat $(PID_DIR)/document.pid) — logs: $(LOG_DIR)/document.log"
-	@echo "  Waiting for startup..."; sleep 4
-	@echo "  document-service ready on gRPC :9093"
 
-start-all: _ensure-dirs ## Start all 3 services in background
+start-all: build _ensure-dirs ## Build jars then start all 3 services in background
+	@echo "Starting all services (java -jar — no Gradle lock contention)..."
 	@$(MAKE) --no-print-directory start-vehicle
 	@$(MAKE) --no-print-directory start-trip
 	@$(MAKE) --no-print-directory start-document
+	@echo "  Waiting for Spring Boot startup..."; sleep 6
 	@echo ""
 	@echo "All services running:"
 	@echo "  vehicle-service  → gRPC :9091  REST :8081"
@@ -103,7 +102,7 @@ run-client: ## Run the gRPC demo client (requires all 3 services to be running)
 	@echo "Running Fleet gRPC Demo Client..."
 	@echo "Make sure services are started with: make start-all"
 	@echo ""
-	$(GRADLE) :grpc-client:bootRun
+	@java -jar grpc-client/build/libs/grpc-client-1.0.0.jar
 
 # ─── Docker ───────────────────────────────────────────────────────────────────
 
@@ -152,6 +151,9 @@ status: ## Show running service PIDs
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
 
+token: ## Generate a signed test JWT for use in grpcui / grpcurl
+	@python3 -c 'import hmac,hashlib,base64,json,time; b=lambda d:base64.urlsafe_b64encode(d.encode() if isinstance(d,str) else d).rstrip(b"=").decode(); h=b(json.dumps({"alg":"HS256","typ":"JWT"},separators=(",",":"))); p=b(json.dumps({"sub":"test-user","roles":["ADMIN"],"iat":int(time.time())},separators=(",",":"))); m=h+"."+p; s=b(hmac.new("your-256-bit-secret-change-in-production".encode(),m.encode(),hashlib.sha256).digest()); print("\nTest JWT (copy the Bearer value below):\n"); print("Bearer "+m+"."+s+"\n")'
+
 clean: ## Clean all build artifacts
 	$(GRADLE) clean
 	rm -rf $(LOG_DIR) $(PID_DIR)
@@ -171,6 +173,19 @@ grpcui-trip: ## Open Swagger-like UI for trip-service in browser
 
 grpcui-document: ## Open Swagger-like UI for document-service in browser
 	grpcui -plaintext localhost:9093
+
+grpcui-stop: ## Kill any running grpcui background processes
+	@pkill -f "grpcui.*plaintext" 2>/dev/null && echo "grpcui processes stopped." || echo "No grpcui processes running."
+
+grpcui-all: grpcui-stop ## Open Swagger-like UI for all 3 services in separate browser tabs
+	@grpcui -plaintext -port 8091 localhost:9091 &
+	@grpcui -plaintext -port 8092 localhost:9092 &
+	@grpcui -plaintext -port 8093 localhost:9093 &
+	@sleep 1
+	@open http://localhost:8091 http://localhost:8092 http://localhost:8093
+	@echo "  vehicle-service UI  → http://localhost:8091"
+	@echo "  trip-service    UI  → http://localhost:8092"
+	@echo "  document-service UI → http://localhost:8093"
 
 # ─── grpcurl Quick-Reference ──────────────────────────────────────────────────
 # (requires brew install grpcurl)
