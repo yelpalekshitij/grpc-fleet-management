@@ -1,5 +1,7 @@
 # gRPC Fleet Management — Learning Demo
 
+![CI](https://github.com/yelpalekshitij/grpc-fleet-management/actions/workflows/ci.yml/badge.svg)
+
 A hands-on Kotlin + Spring Boot microservices project that demonstrates **every
 major gRPC concept** through a realistic fleet management system.
 
