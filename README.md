@@ -55,10 +55,11 @@ grpc-fleet-management/
 │
 ├── grpc-client/              # Demo client — calls all 3 services (run via bootRun)
 │
-├── Makefile                  # Build, test, start/stop, Docker helpers
-├── ARCHITECTURE.md           # Deep dive: data types, patterns, auth, testing
-├── docker-compose.yml
-└── build.gradle.kts          # Multi-module Gradle root
+├── Makefile                      # Build, test, start/stop, Docker helpers
+├── ARCHITECTURE.md               # Deep dive: data types, patterns, auth, testing
+├── docker-compose.yml            # Fast mode: copies pre-built jars (requires local JDK)
+├── docker-compose.standalone.yml # Standalone: builds from source inside Docker
+└── build.gradle.kts              # Multi-module Gradle root
 ```
 
 ---
@@ -112,13 +113,38 @@ make test-report
 make build
 ```
 
-### Option A — Docker Compose (recommended, zero setup)
+### Option A — Docker Compose
+
+Two modes are available depending on whether you have a local JDK installed:
+
+#### A1 — Fast mode (pre-built jars, requires local JDK)
+
+Gradle builds the jars locally first; Docker only copies them into lightweight JRE images.
+First-run build is fast (no downloading inside Docker).
 
 ```bash
-make docker-up          # builds images + starts all 3 services (foreground)
+make docker-up          # build jars locally, then start all 3 services (foreground)
 make docker-up-bg       # same but in background
 make docker-logs        # tail all service logs
 make docker-down        # stop and remove containers
+```
+
+#### A2 — Standalone mode (no local toolchain required)
+
+Everything happens inside Docker using a Debian-based Gradle image (required because the
+`protoc-gen-grpc-java` binary needs glibc and won't run on Alpine). First run is slower
+(downloads Gradle wrapper + all dependencies inside the container), but subsequent builds
+use Docker layer cache.
+
+```bash
+# Option 1 — via Makefile
+make docker-up-standalone      # build from source in Docker, foreground
+make docker-up-standalone-bg   # same but in background
+make docker-logs-standalone    # tail logs
+make docker-down-standalone    # stop and remove containers
+
+# Option 2 — directly with Docker Compose (no make needed)
+docker-compose -f docker-compose.standalone.yml up --build
 ```
 
 Services talk to each other over the `fleet-network` Docker network.

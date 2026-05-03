@@ -1,0 +1,63 @@
+version: '3.9'
+
+# Standalone build — no local toolchain required.
+# Builds all services from source inside Docker using a Debian-based Gradle image
+# (required for protoc-gen-grpc-java, which needs glibc).
+#
+# Usage:  docker-compose -f docker-compose.standalone.yml up --build
+#
+# Note: first build takes several minutes (downloads Gradle wrapper + all deps).
+# Subsequent builds use Docker layer cache and are much faster.
+
+services:
+
+  vehicle-service:
+    build:
+      context: .
+      dockerfile: vehicle-service/Dockerfile.standalone
+    ports:
+      - "8081:8081"   # REST / actuator
+      - "9091:9091"   # gRPC
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
+    networks:
+      - fleet-network
+
+  trip-service:
+    build:
+      context: .
+      dockerfile: trip-service/Dockerfile.standalone
+    ports:
+      - "8082:8082"
+      - "9092:9092"
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
+      - GRPC_CLIENT_VEHICLESERVICE_ADDRESS=static://vehicle-service:9091
+    depends_on:
+      - vehicle-service
+    networks:
+      - fleet-network
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile.standalone
+    ports:
+      - "8083:8083"
+      - "9093:9093"
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - FLEET_AUTH_SKIP_AUTH_METHODS=grpc.health.v1.Health/Check,grpc.reflection
+    volumes:
+      - doc-storage:/tmp/fleet-documents
+    networks:
+      - fleet-network
+
+networks:
+  fleet-network:
+    driver: bridge
+
+volumes:
+  doc-storage:

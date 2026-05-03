@@ -9,7 +9,7 @@ PID_DIR      := .pids
 
 .PHONY: help build test test-vehicle test-trip test-document \
         start-vehicle start-trip start-document start-all stop-all \
-        run-client docker-up docker-down clean logs token \
+        run-client docker-up docker-up-bg docker-up-standalone docker-down clean logs token \
         grpcui-vehicle grpcui-trip grpcui-document grpcui-all grpcui-stop \
         grpcurl-list grpcurl-describe-vehicle grpcurl-describe-trip grpcurl-describe-document
 
@@ -106,15 +106,28 @@ run-client: ## Run the gRPC demo client (requires all 3 services to be running)
 
 # ─── Docker ───────────────────────────────────────────────────────────────────
 
-docker-up: ## Start all services via Docker Compose
+docker-up: build ## Build jars then start all services via Docker Compose (foreground)
 	docker-compose up --build
 
-docker-up-bg: ## Start all services via Docker Compose in background
+docker-up-bg: build ## Build jars then start all services via Docker Compose (background)
 	docker-compose up --build -d
 	@echo "Services started. Use 'make docker-logs' to follow output."
 
-docker-down: ## Stop Docker Compose services
+docker-up-standalone: ## Build from source inside Docker — no local toolchain needed (slower first run)
+	docker-compose -f docker-compose.standalone.yml up --build
+
+docker-up-standalone-bg: ## Build from source inside Docker, run in background
+	docker-compose -f docker-compose.standalone.yml up --build -d
+	@echo "Services started. Use 'make docker-logs-standalone' to follow output."
+
+docker-down: ## Stop Docker Compose services (pre-built workflow)
 	docker-compose down
+
+docker-down-standalone: ## Stop standalone Docker Compose services
+	docker-compose -f docker-compose.standalone.yml down
+
+docker-logs-standalone: ## Tail logs from standalone Docker services
+	docker-compose -f docker-compose.standalone.yml logs -f
 
 docker-logs: ## Tail logs from all Docker services
 	docker-compose logs -f
@@ -166,21 +179,21 @@ _ensure-dirs:
 # Requires services to be running (make start-all) and grpc-services dep on classpath
 
 grpcui-vehicle: ## Open Swagger-like UI for vehicle-service in browser
-	grpcui -plaintext localhost:9091
+	grpcui -plaintext 127.0.0.1:9091
 
 grpcui-trip: ## Open Swagger-like UI for trip-service in browser
-	grpcui -plaintext localhost:9092
+	grpcui -plaintext 127.0.0.1:9092
 
 grpcui-document: ## Open Swagger-like UI for document-service in browser
-	grpcui -plaintext localhost:9093
+	grpcui -plaintext 127.0.0.1:9093
 
 grpcui-stop: ## Kill any running grpcui background processes
 	@pkill -f "grpcui.*plaintext" 2>/dev/null && echo "grpcui processes stopped." || echo "No grpcui processes running."
 
 grpcui-all: grpcui-stop ## Open Swagger-like UI for all 3 services in separate browser tabs
-	@grpcui -plaintext -port 8091 localhost:9091 &
-	@grpcui -plaintext -port 8092 localhost:9092 &
-	@grpcui -plaintext -port 8093 localhost:9093 &
+	@grpcui -plaintext -port 8091 127.0.0.1:9091 &
+	@grpcui -plaintext -port 8092 127.0.0.1:9092 &
+	@grpcui -plaintext -port 8093 127.0.0.1:9093 &
 	@sleep 1
 	@open http://localhost:8091 http://localhost:8092 http://localhost:8093
 	@echo "  vehicle-service UI  → http://localhost:8091"
@@ -192,17 +205,17 @@ grpcui-all: grpcui-stop ## Open Swagger-like UI for all 3 services in separate b
 
 grpcurl-list: ## List available gRPC services on all ports
 	@echo "=== vehicle-service ==="
-	grpcurl -plaintext localhost:9091 list
+	grpcurl -plaintext 127.0.0.1:9091 list
 	@echo "=== trip-service ==="
-	grpcurl -plaintext localhost:9092 list
+	grpcurl -plaintext 127.0.0.1:9092 list
 	@echo "=== document-service ==="
-	grpcurl -plaintext localhost:9093 list
+	grpcurl -plaintext 127.0.0.1:9093 list
 
 grpcurl-describe-vehicle: ## Describe VehicleService methods
-	grpcurl -plaintext localhost:9091 describe fleetmanagement.vehicle.VehicleService
+	grpcurl -plaintext 127.0.0.1:9091 describe fleetmanagement.vehicle.VehicleService
 
 grpcurl-describe-trip: ## Describe TripService methods
-	grpcurl -plaintext localhost:9092 describe fleetmanagement.trip.TripService
+	grpcurl -plaintext 127.0.0.1:9092 describe fleetmanagement.trip.TripService
 
 grpcurl-describe-document: ## Describe DocumentService methods
-	grpcurl -plaintext localhost:9093 describe fleetmanagement.document.DocumentService
+	grpcurl -plaintext 127.0.0.1:9093 describe fleetmanagement.document.DocumentService
