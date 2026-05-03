@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: vehicle-service
+
+server:
+  port: 8081   # REST/actuator port
+
+# gRPC server configuration (net.devh starter)
+grpc:
+  server:
+    port: 9091
+    # For TLS/mTLS in production, configure:
+    # security:
+    #   certificate-chain: classpath:certs/server.crt
+    #   private-key: classpath:certs/server.key
+    #   trust-cert-collection: classpath:certs/ca.crt
+    #   client-auth: REQUIRE   # enforce mTLS
+
+fleet:
+  auth:
+    jwt-secret: "your-256-bit-secret-change-in-production"
+    # Public routes that skip JWT validation
+    skip-auth-methods:
+      - "grpc.health.v1.Health/Check"
+
+logging:
+  level:
+    com.fleetmanagement: DEBUG
+    net.devh.boot.grpc: INFO

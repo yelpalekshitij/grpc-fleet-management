@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: document-service
+
+server:
+  port: 8083
+
+grpc:
+  server:
+    port: 9093
+    # Max inbound message size: default is 4MB.
+    # For large file chunks, increase this. We use 64KB chunks so default is fine.
+    max-inbound-message-size: 4194304  # 4 MB
+
+fleet:
+  auth:
+    jwt-secret: "your-256-bit-secret-change-in-production"
+    skip-auth-methods:
+      - "grpc.health.v1.Health/Check"
+  storage:
+    # In production: point to S3, GCS, or local mount
+    base-path: "/tmp/fleet-documents"
+    max-file-size-bytes: 104857600  # 100 MB
+    chunk-size-bytes: 65536          # 64 KB per streaming chunk
+
+logging:
+  level:
+    com.fleetmanagement: DEBUG

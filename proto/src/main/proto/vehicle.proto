@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package fleetmanagement.vehicle;
+
+option java_package = "com.fleetmanagement.proto.vehicle";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";  // Datetime support
+import "google/protobuf/empty.proto";       // Empty response
+import "common.proto";
+
+// =============================================================================
+// DATA TYPES DEMONSTRATED IN THIS FILE
+//
+//   string          — make, model, id, license_plate, phone, email
+//   int32           — year, passenger_capacity, fuel_level_percent
+//   float           — rating (0.0-5.0), speed_kmh, heading_degrees
+//   double          — fuel_capacity_liters (high precision)
+//   bool            — is_active
+//   enum            — VehicleStatus (named integer constants)
+//   Timestamp       — registered_at, license_expiry, recorded_at (datetime)
+//   repeated string — features, certifications (string array)
+//   nested message  — Driver embedded inside Vehicle
+//   nested message  — Coordinate, Address (imported from common.proto)
+// =============================================================================
+
+// Enum — a named set of integer constants.
+// Proto3 enums must start at 0 (the "unspecified" default value).
+enum VehicleStatus {
+  VEHICLE_STATUS_UNSPECIFIED = 0;
+  VEHICLE_STATUS_AVAILABLE   = 1;
+  VEHICLE_STATUS_ON_TRIP     = 2;
+  VEHICLE_STATUS_MAINTENANCE = 3;
+  VEHICLE_STATUS_INACTIVE    = 4;
+}
+
+// ----- Nested Object: Driver ------------------------------------------------
+// A Driver is always embedded inside a Vehicle — never sent standalone.
+// Demonstrates: string, float, bool, google.protobuf.Timestamp, repeated string
+message Driver {
+  string id             = 1;
+  string first_name     = 2;
+  string last_name      = 3;
+  string phone          = 4;
+  string email          = 5;
+  string license_number = 6;
+
+  // Timestamp stores seconds + nanos since Unix epoch.
+  // For a date-only field (license expiry), we still use Timestamp and
+  // interpret only the date portion. The alternative is google.type.Date.
+  google.protobuf.Timestamp license_expiry = 7;
+
+  float rating          = 8;  // 0.0–5.0, float (32-bit) is precise enough
+  repeated string certifications = 9;  // String array: ["ADR", "FORKLIFT"]
+  bool is_active        = 10;
+}
+
+// ----- Root Object: Vehicle -------------------------------------------------
+// Demonstrates: all scalar types, nested Driver, repeated string, enum, Timestamp
+message Vehicle {
+  string id                    = 1;
+  string make                  = 2;
+  string model                 = 3;
+  int32  year                  = 4;  // int32 covers years (no overflow risk)
+  string license_plate         = 5;
+  string color                 = 6;
+  double fuel_capacity_liters  = 7;  // double for precise decimal values
+  int32  passenger_capacity    = 8;
+  VehicleStatus status         = 9;  // Enum field
+  Driver assigned_driver       = 10; // Nested object
+  google.protobuf.Timestamp registered_at = 11; // Full datetime
+  repeated string features     = 12; // String array: ["GPS", "AC", "DASH_CAM"]
+  fleetmanagement.common.Address home_base = 13; // Imported nested message
+}
+
+// ----- Location Update ------------------------------------------------------
+// Sent periodically by vehicles. Used in streaming RPCs.
+message LocationUpdate {
+  string vehicle_id = 1;
+  fleetmanagement.common.Coordinate coordinates = 2;
+  google.protobuf.Timestamp recorded_at = 3;
+  float speed_kmh          = 4;
+  float heading_degrees    = 5;  // 0–360°
+  int32 fuel_level_percent = 6;  // 0–100
+}
+
+// =============================================================================
+// REQUEST / RESPONSE MESSAGES
+// =============================================================================
+
+message CreateVehicleRequest {
+  string make                   = 1;
+  string model                  = 2;
+  int32  year                   = 3;
+  string license_plate          = 4;
+  string color                  = 5;
+  double fuel_capacity_liters   = 6;
+  int32  passenger_capacity     = 7;
+  repeated string features      = 8;
+  fleetmanagement.common.Address home_base = 9;
+}
+
+message GetVehicleRequest {
+  string id = 1;
+}
+
+message ListVehiclesRequest {
+  VehicleStatus status_filter = 1; // Pass UNSPECIFIED to return all
+  int32 page      = 2;             // 0-based
+  int32 page_size = 3;             // Default 20
+}
+
+message ListVehiclesResponse {
+  repeated Vehicle vehicles          = 1; // Array of nested objects
+  fleetmanagement.common.PageInfo page_info = 2;
+}
+
+message AssignDriverRequest {
+  string vehicle_id = 1;
+  Driver driver     = 2;
+}
+
+message UpdateVehicleStatusRequest {
+  string vehicle_id  = 1;
+  VehicleStatus status = 2;
+}
+
+message UpdateLocationRequest {
+  LocationUpdate location = 1;
+}
+
+// Used to start a server-streaming session for live location tracking.
+message StreamLocationRequest {
+  string vehicle_id = 1;
+  google.protobuf.Timestamp from = 2; // Start streaming from this point in time
+}
+
+// =============================================================================
+// SERVICE DEFINITION — 4 RPC PATTERNS
+// =============================================================================
+service VehicleService {
+
+  // --- Unary RPC ---
+  // Single request → single response. The simplest and most common pattern.
+  rpc CreateVehicle(CreateVehicleRequest)      returns (Vehicle);
+  rpc GetVehicle(GetVehicleRequest)            returns (Vehicle);
+  rpc ListVehicles(ListVehiclesRequest)        returns (ListVehiclesResponse);
+  rpc AssignDriver(AssignDriverRequest)        returns (Vehicle);
+  rpc UpdateVehicleStatus(UpdateVehicleStatusRequest) returns (Vehicle);
+
+  // --- Server-Streaming RPC ---
+  // Client sends one request, server streams N responses.
+  // Perfect for live location tracking — client subscribes once, gets updates.
+  rpc StreamLocationUpdates(StreamLocationRequest) returns (stream LocationUpdate);
+
+  // --- Client-Streaming RPC ---
+  // Client streams N requests, server sends one final response.
+  // Used here for bulk ingestion of location pings (e.g. from a GPS device).
+  rpc BatchUpdateLocations(stream UpdateLocationRequest) returns (google.protobuf.Empty);
+}

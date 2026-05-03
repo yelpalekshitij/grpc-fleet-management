@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package fleetmanagement.common;
+
+option java_package = "com.fleetmanagement.proto.common";
+option java_multiple_files = true;
+
+// =============================================================================
+// COMMON TYPES
+// Shared messages reused across vehicle, trip, and document services.
+// =============================================================================
+
+// Geographic coordinate using WGS84 standard.
+// Demonstrates: double (high-precision floating point), float (altitude)
+message Coordinate {
+  double latitude = 1;          // -90.0 to 90.0 degrees
+  double longitude = 2;         // -180.0 to 180.0 degrees
+  float altitude_meters = 3;    // Optional — float is 32-bit, sufficient for altitude
+}
+
+// Physical address with an optional embedded coordinate.
+// Demonstrates: nested message (Coordinate inside Address)
+message Address {
+  string street = 1;
+  string city = 2;
+  string state = 3;
+  string country = 4;
+  string postal_code = 5;
+  Coordinate coordinates = 6;   // Nested message — GPS pin for the address
+}
+
+// Paginated result metadata used in list responses.
+message PageInfo {
+  int32 page = 1;
+  int32 page_size = 2;
+  int32 total_count = 3;
+  bool has_next = 4;
+}

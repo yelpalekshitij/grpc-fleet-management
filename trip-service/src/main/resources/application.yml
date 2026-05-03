@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: trip-service
+
+server:
+  port: 8082
+
+grpc:
+  server:
+    port: 9092
+
+  # gRPC CLIENT configuration for calling vehicle-service
+  # The name "vehicle-service" matches the @GrpcClient("vehicle-service") annotation
+  client:
+    vehicle-service:
+      address: "static://localhost:9091"  # In k8s: "discovery:///vehicle-service"
+      negotiation-type: plaintext         # Use TLS in production
+      # Interceptors applied on every outbound call to vehicle-service
+      # (configured in AuthClientInterceptor bean)
+
+fleet:
+  auth:
+    jwt-secret: "your-256-bit-secret-change-in-production"
+    # The service-to-service token (in production, use short-lived machine tokens)
+    service-token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0cmlwLXNlcnZpY2UiLCJyb2xlcyI6WyJTRVJWSUNFIl0sImlhdCI6MTcwMDAwMDAwMH0.placeholder"
+    skip-auth-methods:
+      - "grpc.health.v1.Health/Check"
+
+logging:
+  level:
+    com.fleetmanagement: DEBUG
+    net.devh.boot.grpc: INFO

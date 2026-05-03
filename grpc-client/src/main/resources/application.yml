@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: grpc-fleet-client
+
+grpc:
+  client:
+    vehicle-service:
+      address: "static://localhost:9091"
+      negotiation-type: plaintext
+    trip-service:
+      address: "static://localhost:9092"
+      negotiation-type: plaintext
+    document-service:
+      address: "static://localhost:9093"
+      negotiation-type: plaintext
+
+fleet:
+  auth:
+    jwt-secret: "your-256-bit-secret-change-in-production"
+    client-subject: "grpc-demo-client"
+
+logging:
+  level:
+    com.fleetmanagement: INFO
+    net.devh.boot.grpc: WARN

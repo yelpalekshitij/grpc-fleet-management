@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+
+  vehicle-service:
+    build:
+      context: .
+      dockerfile: vehicle-service/Dockerfile
+    ports:
+      - "8081:8081"   # REST / health
+      - "9091:9091"   # gRPC
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+    networks:
+      - fleet-network
+
+  trip-service:
+    build:
+      context: .
+      dockerfile: trip-service/Dockerfile
+    ports:
+      - "8082:8082"
+      - "9092:9092"
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+      - GRPC_CLIENT_VEHICLE-SERVICE_ADDRESS=static://vehicle-service:9091
+    depends_on:
+      - vehicle-service
+    networks:
+      - fleet-network
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile
+    ports:
+      - "8083:8083"
+      - "9093:9093"
+    environment:
+      - FLEET_AUTH_JWT_SECRET=your-256-bit-secret-change-in-production
+    volumes:
+      - doc-storage:/tmp/fleet-documents
+    networks:
+      - fleet-network
+
+networks:
+  fleet-network:
+    driver: bridge
+
+volumes:
+  doc-storage:

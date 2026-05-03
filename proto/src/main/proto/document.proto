@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package fleetmanagement.document;
+
+option java_package = "com.fleetmanagement.proto.document";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+
+// =============================================================================
+// DATA TYPES DEMONSTRATED IN THIS FILE
+//
+//   bytes           — file content (raw binary) — yes, gRPC can transfer files!
+//   int64           — size_bytes (file sizes can exceed 2GB, need 64-bit int)
+//   oneof           — UploadChunk is EITHER metadata OR content bytes
+//   map<k,v>        — custom_attributes on documents
+//   repeated string — tags
+//
+// FILE TRANSFER PATTERN
+// ---------------------
+// gRPC messages have a default 4 MB limit. For large files, we split the file
+// into smaller chunks and stream them. Two approaches:
+//
+//   Upload: Client-streaming   — client sends metadata first, then byte chunks
+//   Download: Server-streaming — server sends metadata first, then byte chunks
+//
+// oneof ensures a single UploadChunk message carries either metadata or bytes,
+// never both — making parsing on the receiver side unambiguous.
+// =============================================================================
+
+// Metadata about a stored document (no file content here)
+message DocumentMetadata {
+  string id          = 1;
+  string filename    = 2;
+  string mime_type   = 3;
+  int64  size_bytes  = 4;  // int64 — file size can exceed int32 max (~2GB)
+  string entity_type = 5;  // "vehicle" | "driver" | "trip"
+  string entity_id   = 6;  // ID of the related entity
+
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+
+  repeated string tags = 9;                     // String array
+  map<string, string> custom_attributes = 10;   // Arbitrary key-value pairs
+}
+
+// Upload message uses oneof — a discriminated union.
+// The sender MUST set exactly ONE of the fields inside oneof.
+// This makes it impossible to accidentally send both metadata and content bytes.
+message UploadChunk {
+  oneof data {
+    DocumentMetadata metadata = 1;  // First message: describe the file
+    bytes content             = 2;  // Subsequent messages: raw file bytes
+  }
+}
+
+// Download response follows the same metadata-first pattern
+message DownloadChunk {
+  oneof data {
+    DocumentMetadata metadata = 1;  // First response: file info
+    bytes content             = 2;  // Subsequent responses: raw file bytes
+  }
+}
+
+message DownloadRequest {
+  string document_id = 1;
+}
+
+message GetDocumentMetadataRequest {
+  string document_id = 1;
+}
+
+message ListDocumentsRequest {
+  string entity_type = 1;  // Filter by entity type
+  string entity_id   = 2;  // Filter by entity ID
+}
+
+message ListDocumentsResponse {
+  repeated DocumentMetadata documents = 1;
+}
+
+message DeleteDocumentRequest {
+  string document_id = 1;
+}
+
+message DeleteDocumentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// =============================================================================
+// SERVICE DEFINITION — ALL 4 RPC PATTERNS SHOWN
+// =============================================================================
+service DocumentService {
+
+  // Unary
+  rpc GetDocumentMetadata(GetDocumentMetadataRequest) returns (DocumentMetadata);
+  rpc ListDocuments(ListDocumentsRequest)             returns (ListDocumentsResponse);
+  rpc DeleteDocument(DeleteDocumentRequest)           returns (DeleteDocumentResponse);
+
+  // Client-streaming: client streams chunks → server returns final metadata
+  // Use case: uploading a file (PDF, image, etc.)
+  rpc UploadDocument(stream UploadChunk) returns (DocumentMetadata);
+
+  // Server-streaming: client sends one request → server streams file chunks
+  // Use case: downloading a file
+  rpc DownloadDocument(DownloadRequest) returns (stream DownloadChunk);
+}

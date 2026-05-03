@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package fleetmanagement.trip;
+
+option java_package = "com.fleetmanagement.proto.trip";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+import "vehicle.proto";
+
+// =============================================================================
+// DATA TYPES DEMONSTRATED IN THIS FILE
+//
+//   int32           — sequence, passenger_count
+//   double          — estimated_distance_km, actual_distance_km
+//   bool            — is_mandatory (waypoint)
+//   enum            — TripStatus
+//   Timestamp       — scheduled_start, scheduled_end, actual_start, actual_end
+//   nested message  — Waypoint (contains Coordinate + Timestamp)
+//   repeated msg    — waypoints: array of nested Waypoint objects  ← key type!
+//   repeated string — tags
+//   map<k,v>        — metadata: dynamic key-value pairs
+// =============================================================================
+
+enum TripStatus {
+  TRIP_STATUS_UNSPECIFIED  = 0;
+  TRIP_STATUS_PLANNED      = 1;
+  TRIP_STATUS_IN_PROGRESS  = 2;
+  TRIP_STATUS_COMPLETED    = 3;
+  TRIP_STATUS_CANCELLED    = 4;
+}
+
+// A Waypoint is a stop along a trip route.
+// Demonstrates: nested message with mixed types (int, string, Coordinate, Timestamp, bool)
+message Waypoint {
+  int32  sequence    = 1;  // Order of this stop (0-indexed)
+  string name        = 2;  // Human-readable label: "Warehouse A"
+  fleetmanagement.common.Coordinate coordinates = 3;
+  google.protobuf.Timestamp scheduled_arrival   = 4;
+  google.protobuf.Timestamp actual_arrival      = 5;
+  string notes       = 6;
+  bool   is_mandatory = 7; // If false, driver may skip this stop
+}
+
+// A Trip ties a vehicle + driver to a route with multiple waypoints.
+// Demonstrates: repeated Waypoint (array of nested objects), map<string,string>
+message Trip {
+  string id          = 1;
+  string vehicle_id  = 2;
+  string driver_id   = 3;
+  string description = 4;
+
+  fleetmanagement.common.Address origin      = 5;
+  fleetmanagement.common.Address destination = 6;
+
+  // Array of nested objects — the richest composite type in proto3
+  repeated Waypoint waypoints = 7;
+
+  google.protobuf.Timestamp scheduled_start = 8;
+  google.protobuf.Timestamp scheduled_end   = 9;
+  google.protobuf.Timestamp actual_start    = 10;
+  google.protobuf.Timestamp actual_end      = 11;
+
+  double estimated_distance_km = 12;
+  double actual_distance_km    = 13;
+  int32  passenger_count       = 14;
+
+  TripStatus status = 15;
+
+  // repeated string — simple string array for categorisation
+  repeated string tags = 16;
+
+  // map<string, string> — key/value metadata for extensibility
+  // e.g. {"cargo_type": "refrigerated", "priority": "high"}
+  map<string, string> metadata = 17;
+}
+
+// Live update pushed during an active trip
+message TripUpdate {
+  string trip_id = 1;
+  fleetmanagement.common.Coordinate current_position = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  float  speed_kmh            = 4;
+  int32  waypoints_completed  = 5;
+  double distance_covered_km  = 6;
+  TripStatus status           = 7;
+}
+
+// =============================================================================
+// REQUEST / RESPONSE MESSAGES
+// =============================================================================
+
+message CreateTripRequest {
+  string vehicle_id  = 1;
+  string driver_id   = 2;
+  string description = 3;
+  fleetmanagement.common.Address origin      = 4;
+  fleetmanagement.common.Address destination = 5;
+  repeated Waypoint waypoints     = 6;
+  google.protobuf.Timestamp scheduled_start = 7;
+  google.protobuf.Timestamp scheduled_end   = 8;
+  int32  passenger_count          = 9;
+  repeated string tags            = 10;
+  map<string, string> metadata    = 11;
+}
+
+message GetTripRequest {
+  string id = 1;
+}
+
+message ListTripsRequest {
+  string     vehicle_id    = 1; // Filter by vehicle (optional)
+  TripStatus status_filter = 2;
+  int32      page          = 3;
+  int32      page_size     = 4;
+}
+
+message ListTripsResponse {
+  repeated Trip trips = 1;
+  fleetmanagement.common.PageInfo page_info = 2;
+}
+
+message StartTripRequest {
+  string trip_id = 1;
+}
+
+message CompleteTripRequest {
+  string trip_id             = 1;
+  double actual_distance_km  = 2;
+}
+
+// Used to open a bidirectional stream for live trip monitoring.
+// Client sends position pings; server echoes enriched TripUpdates.
+message PositionPing {
+  string trip_id = 1;
+  fleetmanagement.common.Coordinate coordinates = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  float speed_kmh = 4;
+}
+
+// =============================================================================
+// SERVICE DEFINITION
+// =============================================================================
+service TripService {
+
+  // Unary RPCs
+  rpc CreateTrip(CreateTripRequest)      returns (Trip);
+  rpc GetTrip(GetTripRequest)            returns (Trip);
+  rpc ListTrips(ListTripsRequest)        returns (ListTripsResponse);
+  rpc StartTrip(StartTripRequest)        returns (Trip);
+  rpc CompleteTrip(CompleteTripRequest)  returns (Trip);
+
+  // --- Bidirectional Streaming RPC ---
+  // Client streams position pings; server streams enriched TripUpdates back.
+  // Both sides can send independently — true full-duplex communication.
+  rpc TrackTrip(stream PositionPing) returns (stream TripUpdate);
+}
