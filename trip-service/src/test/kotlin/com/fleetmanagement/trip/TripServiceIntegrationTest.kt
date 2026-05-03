@@ -111,7 +111,7 @@ class TripServiceIntegrationTest {
 
     @Test
     @Order(1)
-    fun `setup — create a vehicle in vehicle-service for trip tests`() = runBlocking {
+    fun `setup — create a vehicle in vehicle-service for trip tests`() { runBlocking {
         val vehicleStubDirect = VehicleServiceGrpcKt.VehicleServiceCoroutineStub(vehicleChannel)
         val vehicle = vehicleStubDirect.createVehicle(createVehicleRequest {
             make = "Mercedes"; model = "Actros"; year = 2022
@@ -120,11 +120,11 @@ class TripServiceIntegrationTest {
         })
         vehicleId = vehicle.id
         assertThat(vehicleId).isNotBlank()
-    }
+    } }
 
     @Test
     @Order(2)
-    fun `createTrip — cross-service call validates vehicle, repeated Waypoints and map serialized`() = runBlocking {
+    fun `createTrip — cross-service call validates vehicle, repeated Waypoints and map serialized`() { runBlocking {
         val trip = tripStub.createTrip(createTripRequest {
             vehicleId   = this@TripServiceIntegrationTest.vehicleId
             driverId    = "drv-001"
@@ -195,11 +195,11 @@ class TripServiceIntegrationTest {
         // Timestamps (datetime)
         assertThat(trip.scheduledStart.seconds).isGreaterThan(0L)
         assertThat(trip.scheduledEnd.seconds).isGreaterThan(trip.scheduledStart.seconds)
-    }
+    } }
 
     @Test
     @Order(3)
-    fun `createTrip — FAILED_PRECONDITION when vehicle is already on a trip`() = runBlocking {
+    fun `createTrip — FAILED_PRECONDITION when vehicle is already on a trip`() {
         assertThatThrownBy {
             runBlocking {
                 tripStub.createTrip(createTripRequest {
@@ -218,16 +218,16 @@ class TripServiceIntegrationTest {
 
     @Test
     @Order(4)
-    fun `startTrip — transitions status to IN_PROGRESS and sets actualStart Timestamp`() = runBlocking {
+    fun `startTrip — transitions status to IN_PROGRESS and sets actualStart Timestamp`() { runBlocking {
         val started = tripStub.startTrip(startTripRequest { tripId = this@TripServiceIntegrationTest.tripId })
 
         assertThat(started.status).isEqualTo(TripStatus.TRIP_STATUS_IN_PROGRESS)
         assertThat(started.actualStart.seconds).isGreaterThan(0L)  // Timestamp auto-set
-    }
+    } }
 
     @Test
     @Order(5)
-    fun `trackTrip — bidirectional streaming, each ping produces one TripUpdate`() = runBlocking {
+    fun `trackTrip — bidirectional streaming, each ping produces one TripUpdate`() { runBlocking {
         val pings = (1..4).map { i ->
             positionPing {
                 tripId = this@TripServiceIntegrationTest.tripId
@@ -253,11 +253,11 @@ class TripServiceIntegrationTest {
         assertThat(first.speedKmh).isGreaterThan(0f)                             // float
         assertThat(first.currentPosition.latitude).isGreaterThan(0.0)           // double
         assertThat(first.timestamp.seconds).isGreaterThan(0L)                   // Timestamp
-    }
+    } }
 
     @Test
     @Order(6)
-    fun `completeTrip — transitions status and records actual distance`() = runBlocking {
+    fun `completeTrip — transitions status and records actual distance`() { runBlocking {
         val completed = tripStub.completeTrip(completeTripRequest {
             tripId = this@TripServiceIntegrationTest.tripId
             actualDistanceKm = 289.5  // double
@@ -266,7 +266,7 @@ class TripServiceIntegrationTest {
         assertThat(completed.status).isEqualTo(TripStatus.TRIP_STATUS_COMPLETED)
         assertThat(completed.actualDistanceKm).isEqualTo(289.5)  // double preserved
         assertThat(completed.actualEnd.seconds).isGreaterThan(0L) // Timestamp set
-    }
+    } }
 
     @Test
     @Order(7)

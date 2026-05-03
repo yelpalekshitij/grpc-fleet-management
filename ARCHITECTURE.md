@@ -56,23 +56,37 @@ grpc-fleet-management/
 │       └── document.proto          # DocumentMetadata, UploadChunk + service
 │
 ├── vehicle-service/
-│   └── src/main/kotlin/com/fleetmanagement/vehicle/
-│       ├── grpc/VehicleGrpcService.kt      # All 4 RPC patterns implemented
-│       ├── interceptor/AuthServerInterceptor.kt
-│       └── repository/VehicleRepository.kt
+│   ├── src/main/kotlin/com/fleetmanagement/vehicle/
+│   │   ├── grpc/VehicleGrpcService.kt      # All 4 RPC patterns implemented
+│   │   ├── interceptor/AuthServerInterceptor.kt
+│   │   └── repository/VehicleRepository.kt
+│   └── src/test/kotlin/com/fleetmanagement/vehicle/
+│       ├── VehicleServiceIntegrationTest.kt   # 8 tests: data types, streaming
+│       └── AuthInterceptorIntegrationTest.kt  # 4 tests: JWT validation
 │
 ├── trip-service/
-│   └── src/main/kotlin/com/fleetmanagement/trip/
-│       ├── grpc/TripGrpcService.kt         # Calls vehicle-service via @GrpcClient
-│       ├── interceptor/AuthServerInterceptor.kt
-│       ├── interceptor/AuthClientInterceptor.kt  # Adds JWT to outbound calls
-│       └── repository/TripRepository.kt
+│   ├── src/main/kotlin/com/fleetmanagement/trip/
+│   │   ├── grpc/TripGrpcService.kt              # Takes vehicleStub via constructor
+│   │   ├── config/GrpcClientConfig.kt            # Provides vehicleStub as Spring @Bean
+│   │   ├── interceptor/AuthServerInterceptor.kt
+│   │   ├── interceptor/AuthClientInterceptor.kt  # Adds JWT to outbound calls
+│   │   └── repository/TripRepository.kt
+│   └── src/test/kotlin/com/fleetmanagement/trip/
+│       └── TripServiceIntegrationTest.kt         # 7 tests: cross-service + bidi streaming
 │
-└── document-service/
-    └── src/main/kotlin/com/fleetmanagement/document/
-        ├── grpc/DocumentGrpcService.kt     # File upload/download via bytes
-        ├── interceptor/AuthServerInterceptor.kt
-        └── storage/DocumentStorage.kt
+├── document-service/
+│   ├── src/main/kotlin/com/fleetmanagement/document/
+│   │   ├── grpc/DocumentGrpcService.kt     # File upload/download via bytes
+│   │   ├── interceptor/AuthServerInterceptor.kt
+│   │   └── storage/DocumentStorage.kt
+│   └── src/test/kotlin/com/fleetmanagement/document/
+│       └── DocumentServiceIntegrationTest.kt  # 7 tests: bytes, oneof, round-trip
+│
+└── grpc-client/                    # Demo client — Spring Boot CommandLineRunner
+    └── src/main/kotlin/com/fleetmanagement/client/
+        ├── auth/TokenGenerator.kt          # Generates service JWT
+        ├── auth/BearerTokenCredentials.kt  # CallCredentials implementation
+        └── runner/FleetDemoRunner.kt       # Calls all 3 services live
 ```
 
 ---
@@ -335,6 +349,94 @@ both metadata and bytes in the same message.
 
 ---
 
+## Testing Strategy
+
+### In-Process gRPC (no network, no Spring context)
+
+All integration tests use `InProcessServerBuilder` / `InProcessChannelBuilder`.
+This means:
+- Tests run in the same JVM process — no TCP, no port allocation, no port conflicts
+- No `@SpringBootTest` needed — the service class is instantiated directly
+- Fast: full gRPC serialization/deserialization is exercised without network overhead
+
+```kotlin
+@BeforeAll
+fun startServer() {
+    val serverName = InProcessServerBuilder.generateName()  // unique name per test run
+
+    server = InProcessServerBuilder.forName(serverName)
+        .directExecutor()
+        .addService(VehicleGrpcService(VehicleRepository()))  // real service, no mocks
+        .build().start()
+
+    channel = InProcessChannelBuilder.forName(serverName).directExecutor().build()
+    stub = VehicleServiceGrpcKt.VehicleServiceCoroutineStub(channel)
+}
+```
+
+### Cross-Service Testing (trip-service calls vehicle-service)
+
+`TripGrpcService` accepts its `VehicleServiceCoroutineStub` via constructor instead
+of `@GrpcClient` field injection. This allows tests to inject a stub pointing at an
+in-process vehicle server:
+
+```kotlin
+// Production wiring (GrpcClientConfig.kt)
+@Configuration
+class GrpcClientConfig {
+    @GrpcClient("vehicle-service")
+    private lateinit var vehicleServiceChannel: Channel
+
+    @Bean
+    fun vehicleServiceStub() = VehicleServiceGrpcKt.VehicleServiceCoroutineStub(vehicleServiceChannel)
+}
+
+// Test wiring (TripServiceIntegrationTest.kt)
+val vehicleStub = VehicleServiceGrpcKt.VehicleServiceCoroutineStub(vehicleChannel)  // in-process channel
+tripServer = InProcessServerBuilder.forName(tripServerName)
+    .addService(TripGrpcService(TripRepository(), vehicleStub))  // inject real stub
+    .build().start()
+```
+
+The test starts **two in-process servers** (one for vehicle-service, one for trip-service),
+wires them together, and tests the real cross-service gRPC call without any network.
+
+### Test Method Pattern
+
+All `@Test` methods use a block body wrapping `runBlocking { }` rather than an
+expression body. This is required because JUnit 5 skips methods with non-`void`
+return types, and expression bodies infer their return type from the last AssertJ
+expression (non-`Unit`):
+
+```kotlin
+// Correct — block body always returns Unit
+@Test
+fun `my test`() { runBlocking {
+    assertThat(result).isEqualTo(expected)
+} }
+
+// Wrong — return type inferred as AbstractStringAssert<*>, JUnit 5 skips it
+@Test
+fun `my test`() = runBlocking {
+    assertThat(result).isEqualTo(expected)
+}
+```
+
+### Gradle Test Configuration (Gradle 9+)
+
+Two entries are required in every service's `build.gradle.kts` for JUnit 5 to work
+with Gradle 9:
+
+```kotlin
+// 1. Tell Gradle to use JUnit Platform (in root build.gradle.kts subprojects block)
+tasks.withType<Test> { useJUnitPlatform() }
+
+// 2. JUnit Platform launcher must be explicit on the test runtime classpath
+testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+```
+
+---
+
 ## Technology Stack
 
 | Component          | Technology                                |
@@ -346,6 +448,7 @@ both metadata and bytes in the same message.
 | gRPC Kotlin stubs  | `grpc-kotlin-stub:1.4.1`                  |
 | Coroutines         | `kotlinx-coroutines-core:1.8.1`           |
 | Authentication     | JJWT 0.12.6 (HMAC-SHA256)                |
+| Testing            | JUnit 5 + AssertJ, in-process gRPC        |
 | Build              | Gradle 9.2.1 (Kotlin DSL, multi-module)   |
 
 ---

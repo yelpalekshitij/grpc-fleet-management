@@ -47,10 +47,16 @@ grpc-fleet-management/
 │       └── document.proto    # DocumentMetadata, UploadChunk (bytes)
 │
 ├── vehicle-service/          # gRPC :9091 | REST :8081
+│   └── src/test/             # Integration tests (8 service + 4 auth interceptor)
 ├── trip-service/             # gRPC :9092 | REST :8082  (calls vehicle-service)
+│   └── src/test/             # Integration tests (7 tests, incl. cross-service)
 ├── document-service/         # gRPC :9093 | REST :8083  (file upload/download)
+│   └── src/test/             # Integration tests (7 tests, incl. bytes round-trip)
 │
-├── ARCHITECTURE.md           # Deep dive: data types, patterns, auth
+├── grpc-client/              # Demo client — calls all 3 services (run via bootRun)
+│
+├── Makefile                  # Build, test, start/stop, Docker helpers
+├── ARCHITECTURE.md           # Deep dive: data types, patterns, auth, testing
 ├── docker-compose.yml
 └── build.gradle.kts          # Multi-module Gradle root
 ```
@@ -67,31 +73,80 @@ grpc-fleet-management/
 
 ---
 
+## Running Tests
+
+Tests use **in-process gRPC** — no services need to be running, no ports, no Docker.
+
+```bash
+# Run all integration tests across all services
+make test
+# or: ./gradlew test
+
+# Run tests for a single service
+make test-vehicle
+make test-trip
+make test-document
+
+# Open HTML test reports (macOS)
+make test-report
+```
+
+**What's covered:**
+
+| Test file | Tests | What it verifies |
+|-----------|-------|-----------------|
+| `VehicleServiceIntegrationTest` | 8 | All scalar types, nested objects, streaming |
+| `AuthInterceptorIntegrationTest` | 4 | JWT validation, UNAUTHENTICATED status |
+| `TripServiceIntegrationTest` | 7 | Cross-service call, bidirectional streaming, full lifecycle |
+| `DocumentServiceIntegrationTest` | 7 | `bytes` round-trip, `oneof`, 500KB file across 64KB chunks |
+
+---
+
 ## Running Locally
 
 ### 1. Build the proto module first
 
 ```bash
 ./gradlew :proto:generateProto
+# or via Makefile:
+make build
 ```
 
 ### 2. Start all services
 
 ```bash
-# Terminal 1
-./gradlew :vehicle-service:bootRun
+# Using Makefile (recommended — manages PID files and logs)
+make start-all
 
-# Terminal 2
-./gradlew :trip-service:bootRun
+# Or individually:
+make start-vehicle
+make start-trip
+make start-document
 
-# Terminal 3
-./gradlew :document-service:bootRun
+# Check what's running:
+make status
+
+# Stop everything:
+make stop-all
 ```
 
-### 3. Or run everything with Docker Compose
+### 3. Run the demo gRPC client
+
+Once all services are up, the `grpc-client` module walks through every RPC pattern
+against the live services:
 
 ```bash
-docker-compose up --build
+make run-client
+```
+
+### 4. Or run everything with Docker Compose
+
+```bash
+make docker-up
+# background:
+make docker-up-bg
+make docker-logs
+make docker-down
 ```
 
 ---
@@ -281,6 +336,24 @@ grpcurl -plaintext \
 | JWT validation on server | `vehicle-service/.../interceptor/AuthServerInterceptor.kt`      |
 | Token injection on client | `trip-service/.../interceptor/AuthClientInterceptor.kt`        |
 | Reading user from context | `vehicle-service/.../grpc/VehicleGrpcService.kt` — `AUTHENTICATED_USER_KEY.get()` |
+
+### Testing
+
+| What to see                        | File                                                              |
+|------------------------------------|-------------------------------------------------------------------|
+| In-process server setup            | `VehicleServiceIntegrationTest.kt` — `@BeforeAll startServer()`  |
+| Auth interceptor wired in-process  | `AuthInterceptorIntegrationTest.kt` — `ServerInterceptors.intercept()` |
+| Cross-service test (two in-process servers) | `TripServiceIntegrationTest.kt` — `startServers()`      |
+| Bytes round-trip test              | `DocumentServiceIntegrationTest.kt` — `bytes round-trip` test    |
+| Full trip lifecycle test           | `TripServiceIntegrationTest.kt` — orders 1–7                     |
+
+### Demo Client
+
+| What to see                   | File                                                          |
+|-------------------------------|---------------------------------------------------------------|
+| Live calls to all 3 services  | `grpc-client/.../runner/FleetDemoRunner.kt`                  |
+| JWT token generation          | `grpc-client/.../auth/TokenGenerator.kt`                     |
+| `CallCredentials` per-call auth | `grpc-client/.../auth/BearerTokenCredentials.kt`           |
 
 ---
 

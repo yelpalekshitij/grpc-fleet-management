@@ -74,7 +74,7 @@ class AuthInterceptorIntegrationTest {
     }
 
     @Test
-    fun `no Authorization header — returns UNAUTHENTICATED`() = runBlocking {
+    fun `no Authorization header — returns UNAUTHENTICATED`() { runBlocking {
         assertThatThrownBy {
             runBlocking { stub.listVehicles(listVehiclesRequest {}) }
         }.isInstanceOf(StatusException::class.java)
@@ -82,10 +82,10 @@ class AuthInterceptorIntegrationTest {
                 assertThat((ex as StatusException).status.code)
                     .isEqualTo(io.grpc.Status.Code.UNAUTHENTICATED)
             })
-    }
+    } }
 
     @Test
-    fun `malformed Bearer token — returns UNAUTHENTICATED`() = runBlocking {
+    fun `malformed Bearer token — returns UNAUTHENTICATED`() { runBlocking {
         val badToken = "not.a.real.jwt"
         assertThatThrownBy {
             runBlocking {
@@ -97,24 +97,24 @@ class AuthInterceptorIntegrationTest {
                 assertThat((ex as StatusException).status.code)
                     .isEqualTo(io.grpc.Status.Code.UNAUTHENTICATED)
             })
-    }
+    } }
 
     @Test
-    fun `valid JWT — request reaches the handler and returns OK`() = runBlocking {
+    fun `valid JWT — request reaches the handler and returns OK`() { runBlocking {
         val token = validToken()
         // No exception = interceptor accepted the token and handler ran
         val response = stub.withCallCredentials(bearerCreds(token))
             .listVehicles(listVehiclesRequest {})
         assertThat(response).isNotNull()
-    }
+    } }
 
     @Test
-    fun `valid JWT — authenticated user context is populated`() = runBlocking {
+    fun `valid JWT — authenticated user context is populated`() { runBlocking {
         val token = validToken(subject = "integration-test-user", roles = listOf("ADMIN"))
         val response = stub.withCallCredentials(bearerCreds(token))
             .listVehicles(listVehiclesRequest {})
         assertThat(response).isNotNull()
-    }
+    } }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

@@ -89,7 +89,7 @@ class VehicleServiceIntegrationTest {
 
     @Test
     @Order(1)
-    fun `createVehicle — all scalar and nested types round-trip correctly`() = runBlocking {
+    fun `createVehicle — all scalar and nested types round-trip correctly`() { runBlocking {
         val response = stub.createVehicle(createVehicleRequest {
             make  = "Toyota"
             model = "Land Cruiser"
@@ -137,20 +137,20 @@ class VehicleServiceIntegrationTest {
 
         // Timestamp (datetime) — auto-set on creation
         assertThat(response.registeredAt.seconds).isGreaterThan(0L)
-    }
+    } }
 
     @Test
     @Order(2)
-    fun `getVehicle — retrieves the vehicle created in test 1`() = runBlocking {
+    fun `getVehicle — retrieves the vehicle created in test 1`() { runBlocking {
         val response = stub.getVehicle(getVehicleRequest { id = vehicleId })
 
         assertThat(response.id).isEqualTo(vehicleId)
         assertThat(response.make).isEqualTo("Toyota")
-    }
+    } }
 
     @Test
     @Order(3)
-    fun `assignDriver — embeds nested Driver with all field types`() = runBlocking {
+    fun `assignDriver — embeds nested Driver with all field types`() { runBlocking {
         driverId = "drv-001"
 
         val response = stub.assignDriver(assignDriverRequest {
@@ -179,11 +179,11 @@ class VehicleServiceIntegrationTest {
         assertThat(d.certificationsList).containsExactly("ADR", "HGV")  // repeated string
         assertThat(d.isActive).isTrue()                            // bool
         assertThat(d.licenseExpiry.seconds).isGreaterThan(0L)      // Timestamp
-    }
+    } }
 
     @Test
     @Order(4)
-    fun `listVehicles — returns paginated repeated nested Vehicle objects`() = runBlocking {
+    fun `listVehicles — returns paginated repeated nested Vehicle objects`() { runBlocking {
         val response = stub.listVehicles(listVehiclesRequest {
             statusFilter = VehicleStatus.VEHICLE_STATUS_UNSPECIFIED  // return all
             page     = 0
@@ -194,11 +194,11 @@ class VehicleServiceIntegrationTest {
         assertThat(response.vehiclesList).isNotEmpty()
         assertThat(response.pageInfo.totalCount).isGreaterThan(0)   // PageInfo nested message
         assertThat(response.pageInfo.page).isEqualTo(0)
-    }
+    } }
 
     @Test
     @Order(5)
-    fun `listVehicles with status filter — only returns AVAILABLE vehicles`() = runBlocking {
+    fun `listVehicles with status filter — only returns AVAILABLE vehicles`() { runBlocking {
         val response = stub.listVehicles(listVehiclesRequest {
             statusFilter = VehicleStatus.VEHICLE_STATUS_AVAILABLE    // enum filter
             pageSize = 20
@@ -207,11 +207,11 @@ class VehicleServiceIntegrationTest {
         assertThat(response.vehiclesList).allMatch {
             it.status == VehicleStatus.VEHICLE_STATUS_AVAILABLE
         }
-    }
+    } }
 
     @Test
     @Order(6)
-    fun `streamLocationUpdates — server-streaming emits multiple LocationUpdate messages`() = runBlocking {
+    fun `streamLocationUpdates — server-streaming emits multiple LocationUpdate messages`() { runBlocking {
         // Server-streaming: toList() collects all emitted messages
         val updates = stub.streamLocationUpdates(
             streamLocationRequest { vehicleId = this@VehicleServiceIntegrationTest.vehicleId }
@@ -231,11 +231,11 @@ class VehicleServiceIntegrationTest {
         // Verify coordinates change across updates (simulated movement)
         assertThat(updates.first().coordinates.latitude)
             .isNotEqualTo(updates.last().coordinates.latitude)
-    }
+    } }
 
     @Test
     @Order(7)
-    fun `batchUpdateLocations — client-streaming processes all streamed messages`() = runBlocking {
+    fun `batchUpdateLocations — client-streaming processes all streamed messages`() { runBlocking {
         val batchSize = 5
         val pings = (1..batchSize).map { i ->
             updateLocationRequest {
@@ -258,11 +258,11 @@ class VehicleServiceIntegrationTest {
 
         // Server returns Empty (no body) when all messages processed
         assertThat(result).isNotNull()
-    }
+    } }
 
     @Test
     @Order(8)
-    fun `getVehicle — returns NOT_FOUND status for unknown vehicle ID`() = runBlocking {
+    fun `getVehicle — returns NOT_FOUND status for unknown vehicle ID`() {
         assertThatThrownBy {
             runBlocking {
                 stub.getVehicle(getVehicleRequest { id = "this-id-does-not-exist" })

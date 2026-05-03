@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.TestMethodOrder
-import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 
 // =============================================================================
@@ -50,9 +50,7 @@ import java.nio.file.Path
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class DocumentServiceIntegrationTest {
 
-    @TempDir
-    lateinit var tempDir: Path
-
+    private lateinit var tempDir: Path
     private lateinit var server: Server
     private lateinit var channel: ManagedChannel
     private lateinit var stub: DocumentServiceGrpcKt.DocumentServiceCoroutineStub
@@ -61,6 +59,7 @@ class DocumentServiceIntegrationTest {
 
     @BeforeAll
     fun startServer() {
+        tempDir = Files.createTempDirectory("fleet-doc-test-")
         val serverName = InProcessServerBuilder.generateName()
         val storage = DocumentStorage(tempDir.toString())
 
@@ -78,11 +77,12 @@ class DocumentServiceIntegrationTest {
     fun stopServer() {
         channel.shutdownNow()
         server.shutdownNow()
+        tempDir.toFile().deleteRecursively()
     }
 
     @Test
     @Order(1)
-    fun `uploadDocument — client-streaming with metadata + byte chunks via oneof`() = runBlocking {
+    fun `uploadDocument — client-streaming with metadata + byte chunks via oneof`() { runBlocking {
         val content = "Fleet vehicle registration document content. ".repeat(100).toByteArray()
         val chunkSize = 256
 
@@ -120,11 +120,11 @@ class DocumentServiceIntegrationTest {
         assertThat(meta.tagsList).containsExactlyInAnyOrder("registration", "legal")  // repeated string
         assertThat(meta.customAttributesMap).containsEntry("year", "2024")             // map<string,string>
         assertThat(meta.createdAt.seconds).isGreaterThan(0L)                           // Timestamp
-    }
+    } }
 
     @Test
     @Order(2)
-    fun `downloadDocument — server-streaming returns metadata chunk then byte chunks`() = runBlocking {
+    fun `downloadDocument — server-streaming returns metadata chunk then byte chunks`() { runBlocking {
         val allChunks = stub.downloadDocument(downloadRequest { documentId = uploadedDocId }).toList()
 
         // First chunk is always metadata (oneof.metadata)
@@ -141,11 +141,11 @@ class DocumentServiceIntegrationTest {
             assertThat(chunk.hasContent()).isTrue()
             assertThat(chunk.content.size()).isGreaterThan(0)
         }
-    }
+    } }
 
     @Test
     @Order(3)
-    fun `bytes round-trip — uploaded bytes equal downloaded bytes exactly`() = runBlocking {
+    fun `bytes round-trip — uploaded bytes equal downloaded bytes exactly`() { runBlocking {
         val originalContent = "This is the exact binary content we want to round-trip.".repeat(50)
             .toByteArray()
 
@@ -172,11 +172,11 @@ class DocumentServiceIntegrationTest {
         // Exact byte-for-byte equality
         assertThat(downloaded).isEqualTo(originalContent)
         assertThat(downloaded.size).isEqualTo(originalContent.size)
-    }
+    } }
 
     @Test
     @Order(4)
-    fun `large file — correctly split into multiple 64KB chunks and reassembled`() = runBlocking {
+    fun `large file — correctly split into multiple 64KB chunks and reassembled`() { runBlocking {
         val largeContent = ByteArray(500_000) { it.toByte() }  // ~488KB
 
         val meta = stub.uploadDocument(flow {
@@ -204,22 +204,22 @@ class DocumentServiceIntegrationTest {
         val downloaded = chunks.drop(1).fold(ByteArray(0)) { acc, c -> acc + c.content.toByteArray() }
         assertThat(downloaded).isEqualTo(largeContent)
         assertThat(chunks.drop(1)).hasSizeGreaterThan(1)  // verified multiple chunks
-    }
+    } }
 
     @Test
     @Order(5)
-    fun `getDocumentMetadata — unary fetch returns stored metadata`() = runBlocking {
+    fun `getDocumentMetadata — unary fetch returns stored metadata`() { runBlocking {
         val meta = stub.getDocumentMetadata(getDocumentMetadataRequest { documentId = uploadedDocId })
 
         assertThat(meta.id).isEqualTo(uploadedDocId)
         assertThat(meta.filename).isEqualTo("vehicle-reg-001.pdf")
         assertThat(meta.sizeBytes).isGreaterThan(0L)                 // int64
         assertThat(meta.entityType).isEqualTo("vehicle")
-    }
+    } }
 
     @Test
     @Order(6)
-    fun `listDocuments — filters by entityType and entityId`() = runBlocking {
+    fun `listDocuments — filters by entityType and entityId`() { runBlocking {
         val list = stub.listDocuments(listDocumentsRequest {
             entityType = "vehicle"
             entityId   = "veh-001"
@@ -227,11 +227,11 @@ class DocumentServiceIntegrationTest {
 
         assertThat(list.documentsList).isNotEmpty()
         assertThat(list.documentsList).allMatch { it.entityType == "vehicle" }
-    }
+    } }
 
     @Test
     @Order(7)
-    fun `deleteDocument — removes document, subsequent download returns NOT_FOUND`() = runBlocking {
+    fun `deleteDocument — removes document, subsequent download returns NOT_FOUND`() { runBlocking {
         val del = stub.deleteDocument(deleteDocumentRequest { documentId = uploadedDocId })
         assertThat(del.success).isTrue()
 
@@ -244,5 +244,5 @@ class DocumentServiceIntegrationTest {
                 assertThat((ex as StatusException).status.code)
                     .isEqualTo(io.grpc.Status.Code.NOT_FOUND)
             })
-    }
+    } }
 }
